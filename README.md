@@ -26,21 +26,20 @@ If the copy does not complete successfully, or you suspect the file is incomplet
 
 1. Check whether you have *Python* installed.  e.g., on Windows: <kbd>Windows</kbd>+<kbd>R</kbd>: `cmd /k python` -- if you get an error message, you may not have Python installed.  You can install Python from: [python.org/downloads](https://www.python.org/downloads/)
 
-2. If you are on Windows and want to be able to create a disk image from the device itself, save this page: [cwa-dump.py](https://raw.githubusercontent.com/digitalinteraction/cwa-recover/main/cwa-dump.py) as a file on your computer named `cwa-dump.py`).
+2. If you are on Windows or Mac and want to be able to create a disk image from the device itself, save this page: [cwa-dump.py](https://raw.githubusercontent.com/digitalinteraction/cwa-recover/main/cwa-dump.py) as a file on your computer named `cwa-dump.py`.
 
 3. Save this page: [cwa-recover.py](https://raw.githubusercontent.com/digitalinteraction/cwa-recover/main/cwa-recover.py) as a file on your computer named `cwa-recover.py`, in the same directory as the previous file.
 
-4. Open a terminal / command-line in the same folder as your downloaded files:
+4. Open a terminal / command-line in the same folder as your downloaded files.  For example:
     * **Windows:** Press <kbd>Windows</kbd>+<kbd>R</kbd>, type: `cmd /k "cd Downloads"` and press <kbd>Enter</kbd>.
     * **macOS:** Open *Terminal*, type: `cd ~/Downloads` and press <kbd>Enter</kbd>.
-    * **Linux:** Open a *Terminal* and change to the directory you downloaded the files to.
 
 
 ## Step 3: Create a disk image from the device
 
 If the data is still on the device: follow these steps to create an *image* file from the device -- this should be done even if you have previously copied off the file, as that data could be incomplete.  If the data was cleared from the device, you can skip this step.
 
-* **Windows:**  You can use the `cwa-dump.py` script (downloaded above) to read the drive to create a disk image.
+* **Windows/Mac:**  You can use the `cwa-dump.py` script (downloaded above) to read the drive to create a disk image.
 
     1. Make sure you have a single AX device attached.
 
@@ -50,11 +49,11 @@ If the data is still on the device: follow these steps to create an *image* file
 
     The script will create a disk image file `cwa-dump.img` from the single attached AX device.
 
-    > As an alternative, you could use [imageUSB](https://www.osforensics.com/tools/write-usb-images.html) tool to *Create image from USB drive*.
+* **Windows (alternative):** You could use [imageUSB](https://www.osforensics.com/tools/write-usb-images.html) tool to *Create image from USB drive*.
 
-* **macOS:** Ensure the AX device is attached.  Open the *Terminal*.  List the connected drives with: `diskutil list`.  Use the appropriate device name instead of the `$DISK` placeholder while running the following commands.  Unmount the drive: `diskutil unmountDisk /dev/$DISK` -- now create the drive image (this will take a long time with no progress shown): `sudo dd if=/dev/$DISK of=cwa-dump.img bs=512`
+* **macOS (alternative):** Ensure the AX device is attached.  Open the *Terminal*.  List the connected drives with: `diskutil list`.  Use the appropriate device name instead of the `$DISK` placeholder while running the following commands.  Unmount the drive: `diskutil unmountDisk /dev/$DISK` -- now create the drive image (this will take a long time with no progress shown): `sudo dd if=/dev/$DISK of=cwa-dump.img bs=512`
 
-* **Linux:** You can use the `dd` command to create a disk image.
+* **Other OS:** You can use the `dd` command to create a disk image.
 
 
 ## Step 4: Recover a `.cwa` file
