@@ -56,6 +56,10 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
   idxTimestamp = method.index('t')
   idxSession = method.index('s')
   idxSequenceId = method.index('q')
+
+  reorder = True
+  if method.index('+') != -1:
+    reorder = False
   
   print("Reading input: ", inputFile)
   
@@ -115,15 +119,19 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
         sequenceId = unpack('<I', block[o+10:o+14])[0]
         
         # Report on mismatched checksums
-        if countChecksumErrors < maxChecksumErrors:
-          if completeBlock:
-            checksum = unpack('<H', block[o+510:o+512])[0]
-            actualChecksum = checksum512(block)
-            if actualChecksum != 0:
-              countChecksumErrors += 1
-              print("Mismatched checksum #" + str(countChecksumErrors) + " at " + str(i) + " = " + str(actualChecksum) + " (" + str(checksum) + ")")
-              if countChecksumErrors >= maxChecksumErrors:
-                print("NOTE: No more checksum errors will be reported!")
+        checksumOk = False
+        if completeBlock:
+          checksum = unpack('<H', block[o+510:o+512])[0]
+          actualChecksum = checksum512(block)
+          if actualChecksum == 0:
+            checksumOk = True
+
+        if not checksumOk:
+          countChecksumErrors += 1
+          if countChecksumErrors < maxChecksumErrors:
+            print("Mismatched checksum #" + str(countChecksumErrors) + " at " + str(i) + " = " + str(actualChecksum) + " (" + str(checksum) + ")")
+            if countChecksumErrors >= maxChecksumErrors - 1:
+              print("NOTE: No more checksum errors will be reported!")
 
         # For an incomplete block
         if not completeBlock:
@@ -154,7 +162,7 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
               # print("NOTE: Non-consecutive sequence ID: " + str(sequenceId) + " (" + str(nextSequence) + ") ^" + hex(x))
               pass
         
-        item = [0, 0, 0, fileOffset, blockLength]
+        item = [0, 0, 0, fileOffset, blockLength, checksumOk]
         item[idxSession] = sessionId
         item[idxTimestamp] = timestamp
         item[idxSequenceId] = sequenceId
@@ -179,8 +187,9 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
   print("Found: " + str(len(metadata)) + " raw metadata block(s), " + str(len(data)) + " raw data block(s)")
   print("Corrected: " + str(countCorrectedSession) + " session IDs, and " + str(countCorrectedSequence) + " sequences")
   
-  print("Sorting data blocks...")
-  data = sorted(data)
+  if reorder:
+    print("Sorting data blocks...")
+    data = sorted(data)
   
   print("Writing output: ", outputFile)
   with open(outputFile, 'wb') as fo:
@@ -225,6 +234,7 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
       fileOffset = data[i][3]
       fileSector = data[i][3] // sectorSize
       blockLength = data[i][4]
+      checksumOk = data[i][5]
       if lastData != None:
         prevSessionId = lastData[idxSession]
         prevTimestamp = lastData[idxTimestamp]
@@ -235,6 +245,10 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
         prevTimestamp = None
         prevSequenceId = None
         prevFileSector = None
+      recalculateChecksum = False
+
+      if (modifyFlags & 16) != 0 and not checksumOk:
+        recalculateChecksum = True
       
       print("Timestamp: " + str(timestamp))
       
@@ -252,10 +266,7 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
           print("Resequenced: " + str(sequenceId) + " -> " + str(nextSequence))
           sequenceId = nextSequence
           pack_into('<I', block, 10, sequenceId)
-          # Recalculate checksum
-          pack_into('<H', block, 510, 0)
-          checksumAtZero = checksum512(block)
-          pack_into('<H', block, 510, (~checksumAtZero + 1) & 0xffff)
+          recalculateChecksum = True
       
       # Trace
       if False:
@@ -289,11 +300,7 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
         # Resequence
         if (modifyFlags & 2) != 0:
             pack_into('<I', block, 6, globalSessionId)
-            # Recalculate checksum
-            pack_into('<H', block, 510, 0)
-            checksumAtZero = checksum512(block)
-            pack_into('<H', block, 510, (~checksumAtZero + 1) & 0xffff)
-            
+            recalculateChecksum = True
       
       missingBytes = 0
       if blockLength < sectorSize:
@@ -330,16 +337,28 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
         
         # Checksum invalid if any missing bytes
         if missingBytes > 0:
-          # TODO: recalculate checksum instead of storing zero
           block[510] = 0x00
           block[511] = 0x00
+          recalculateChecksum = True
       
+      # Recalculate checksum
+      if recalculateChecksum:
+        finalChecksum = 0x0000
+        # Flag can be set to set recomputed checksums to zero
+        if (modifyFlags & 32) == 0:
+          pack_into('<H', block, 510, 0)
+          checksumAtZero = checksum512(block)
+          finalChecksum = (~checksumAtZero + 1) & 0xffff
+        pack_into('<H', block, 510, finalChecksum)
+
       fo.write(block)
       lastData = data[i]
       numWritten += 1
       if bytesPerSample != 0:
         totalSamples += (480 / bytesPerSample)
 
+    print("Total input checksum errors: " + str(countChecksumErrors))
+    print("Total input sectors: " + str(numSectors))
     print("Wrote " + str(numWritten) + " sectors")
     print("Duplicates: " + str(numDuplicates))
     print("Out-of-sequence: " + str(numOutOfSequence))
@@ -375,6 +394,9 @@ def main():
       elif sys.argv[arg] == "--modify":
         arg += 1
         modifyFlags = int(sys.argv[arg])
+      elif sys.argv[arg] == "--method-none":
+        # Special method to disable reordering
+        method = "tsq+"
       else:
         print("ERROR: Unrecognized option: " + sys.argv[arg])
         return
