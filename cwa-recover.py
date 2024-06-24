@@ -58,7 +58,7 @@ def recoverCwa(inputFile, outputFile, method, modifyFlags):
   idxSequenceId = method.index('q')
 
   reorder = True
-  if method.index('+') != -1:
+  if method.find('+') != -1:
     reorder = False
   
   print("Reading input: ", inputFile)

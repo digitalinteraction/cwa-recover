@@ -169,8 +169,12 @@ def findPhysicalDrives():
   elif platform.system() == "Darwin":
     # diskutil list | grep -E "\bAX\d+_\d+\b" | grep -Eo "\bdisk\d+s\d+"
     command = "diskutil list | grep -E \"\\bAX\\d+_\\d+\\b\" | grep -Eo \"\\bdisk\\d+s\\d+\""
-    out = check_output(["bash", "-c", command])
     paths = []
+    try:
+      out = check_output(["bash", "-c", command])
+    except:
+      print("ERROR: Problem detecting device physical drive -- please check the device is connected.")
+      return paths
     lines = out.split(b"\n")
     for line in lines:
       line = line.decode("utf-8")
@@ -237,7 +241,7 @@ def rerunElevated():
 
   # Unsupported platform
   else:
-    raise RuntimeError("Not running as an admin -- try 'sudo' at the start of the command.")
+    print("..." + platform.system() + ": Not running with elevated permissions and will not attempt to automatically re-run on this platform -- try re-running the command prefixed with: sudo")
 
 
 def pause():
@@ -245,17 +249,16 @@ def pause():
   input()
 
 def main():
-  print("Checking elevation requirements...")
-  if needsToRunElevated():
-    return rerunElevated()
-
+  #atexit.register(pause)
   print("Running...")
-  atexit.register(pause)
 
+  # Options
   drivePath = None
   outputFile = None
   mode = "xb"
   type = None
+  attemptElevate = True
+  pauseOnExit = True
   arg = 1
   while arg < len(sys.argv):
     if sys.argv[arg].startswith("-"):
@@ -288,6 +291,12 @@ def main():
         else:
           print("WARNING: No output file specified after --dest")
 
+      elif sys.argv[arg] == "--no-pause":
+        pauseOnExit = False
+
+      elif sys.argv[arg] == "--no-elevate":
+        attemptElevate = False
+
       else:
         print("ERROR: Unrecognized option: " + sys.argv[arg])
         return
@@ -317,8 +326,21 @@ def main():
     print("ERROR: No device specified or found -- cannot continue.")
     return
 
+  print("Checking whether likely needs to run with elevated permissions...")
+  if needsToRunElevated():
+    print("...it is likely to need to run with elevated permissions.")
+    if attemptElevate:
+      print("...attempting to elevate...")
+      ret = rerunElevated()
+      if ret is not None:
+        return ret
+
   # Run code needing admin rights
-  driveDump(drivePath, outputFile, mode, type)
+  ret = driveDump(drivePath, outputFile, mode, type)
+  if pauseOnExit:
+    pause()
+
+  return ret
 
 if __name__ == "__main__":
   main()
